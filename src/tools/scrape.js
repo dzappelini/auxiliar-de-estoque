@@ -6,6 +6,8 @@ require("dotenv").config({
 async function fetchTankVolumes() {
   const username = process.env.USERNAME;
   const password = process.env.PASSWORD;
+  const tecnoliqLogin = process.env.TECNOLIQ_LOGIN;
+  const redirectUrlAfterLogin = process.env.TECNOLIQ_REDIRECT_URL_AFTER_LOGIN;
 
   // Verifique se as variáveis de ambiente foram carregadas corretamente
   if (!username || !password) {
@@ -27,7 +29,7 @@ async function fetchTankVolumes() {
     const page = await browser.newPage();
 
     console.log("Navegando para a página de login...");
-    await page.goto("https://www.tecnoliq.com.br/sistema/Login.aspx?url=", {
+    await page.goto(tecnoliqLogin, {
       waitUntil: "networkidle2",
     });
 
@@ -66,7 +68,7 @@ async function fetchTankVolumes() {
     console.log(
       "Login realizado com sucesso. Navegando para a página principal..."
     );
-    await page.goto("https://www.tecnoliq.com.br/sistema/Default.aspx", {
+    await page.goto(redirectUrlAfterLogin, {
       waitUntil: "networkidle2",
     });
 

@@ -1,6 +1,7 @@
 const express = require("express");
 const puppeteer = require("puppeteer");
 const cors = require("cors");
+const helmet = require("helmet");
 require("dotenv").config({
   path: require("path").resolve(__dirname, ".env.development"),
 });
@@ -8,14 +9,27 @@ require("dotenv").config({
 const app = express();
 const port = process.env.PORT || 3001;
 
-app.use(cors());
+// Configurar Helmet
+app.use(helmet());
+
+// Configurar CORS
+const corsOptions = {
+  origin: "*", // Permitir todas as origens
+  optionsSuccessStatus: 200,
+};
+
+app.use(cors(corsOptions));
 
 async function fetchTankVolumes() {
   const username = process.env.USERNAME;
   const password = process.env.PASSWORD;
+  const tecnoliqLogin = process.env.TECNOLIQ_LOGIN;
+  const redirectUrlAfterLogin = process.env.TECNOLIQ_REDIRECT_URL_AFTER_LOGIN;
 
-  if (!username || !password) {
-    throw new Error("Credenciais não encontradas. Verifique o arquivo .env");
+  if (!username || !password || !tecnoliqLogin || !redirectUrlAfterLogin) {
+    throw new Error(
+      "Credenciais ou URLs não encontradas. Verifique o arquivo .env"
+    );
   }
 
   console.log("Iniciando o Puppeteer...");
@@ -27,7 +41,7 @@ async function fetchTankVolumes() {
   const page = await browser.newPage();
 
   console.log("Navegando para a página de login...");
-  await page.goto("https://www.tecnoliq.com.br/sistema/Login.aspx?url=", {
+  await page.goto(tecnoliqLogin, {
     waitUntil: "networkidle2",
   });
 
@@ -63,7 +77,7 @@ async function fetchTankVolumes() {
   console.log(
     "Login realizado com sucesso. Navegando para a página principal..."
   );
-  await page.goto("https://www.tecnoliq.com.br/sistema/Default.aspx", {
+  await page.goto(redirectUrlAfterLogin, {
     waitUntil: "networkidle2",
   });
 
@@ -71,20 +85,39 @@ async function fetchTankVolumes() {
   await page.waitForSelector(".tanque .volume .quantidade", { timeout: 60000 });
   await new Promise((resolve) => setTimeout(resolve, 5000));
 
+  const dateUpdated = await page.$eval(
+    ".titulo-principal-paginas #spnDataAtualizacao",
+    (el) => el.innerText.trim()
+  );
+
   const tankData = await page.$$eval(".tanque", (elements) => {
-    return elements.map((el, index) => {
+    return elements.map((el) => {
       const name = el.querySelector(".conteudo .nome").innerText.trim();
       const volume = el.querySelector(".volume .quantidade").innerText.trim();
       const product = el
         .querySelector(".conteudo .combustivel")
         .innerText.trim();
-      return { name, volume, product };
+      const dateFont = el.querySelector(".conteudo .data").innerText.trim();
+
+      const dataContent = el
+        .querySelector(".volume")
+        .getAttribute("data-content");
+      const capacidadeMatch = dataContent
+        ? dataContent.match(/Capacidade: <b class="capacidade-texto">([\d,.]+)/)
+        : null;
+      const capacidade = capacidadeMatch
+        ? capacidadeMatch[1].replace(".", "").replace(",", ".")
+        : "N/A";
+
+      return { name, volume, product, dateFont, capacidade };
     });
   });
 
   await browser.close();
 
-  const validTankData = tankData.filter((data) => data.volume !== "0 LT");
+  const validTankData = tankData
+    .filter((data) => data.volume !== "0 LT")
+    .map((data) => ({ ...data, dateUpdated }));
 
   console.log("Dados capturados:", validTankData);
 
